@@ -119,7 +119,7 @@ if __name__ == '__main__':
             blks = simulate(btc[0][1], btc[-1][1], smoothed, interval=I, gain=g, limiter=l)
             res.append( (utility_function(blks), len(blks)) )
         res = np.array(res)
-        quality = (l, stats.tmean(res[:,0]), stats.sem(res[:,0]), stats.tmean(res[:,1])/((frc[-1][1]-frc[0][1])/600.0))
+        quality = (l, stats.tmean(res[:,0]), stats.sem(res[:,0]), stats.tmean(res[:,1])/((btc[-1][1]-btc[0][1])/600.0))
         print(u"l=%f: %f +/- %f, %f" % quality)
         fp.write("%f,%f,%f,%f\n" % quality)
     fp.close()
