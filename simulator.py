@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import numpy as np
+from scipy import stats
+
 FILTER_COEFF = [
      -845859,  -459003,  -573589,  -703227,  -848199, -1008841,
     -1183669, -1372046, -1573247, -1787578, -2011503, -2243311,
@@ -56,13 +59,20 @@ def simulate(start, end, nethash, interval=72, gain=0.18, limiter=2.0):
     while time < end:
         if not len(blocks)%interval:
             nd = next_difficulty(blocks[:-146:-1], gain, limiter)
-        blocks.append( (round(time), nd) )
         nh = nethash(time)
-        time += expovariate(1.0 / (600.0 * nd / nh))
-        #print (nd, nh, time)
-    return blocks
+        nt = expovariate(1.0 / (600.0 * nd / nh))
+        blocks.append( (round(time), nd, nh, nt) )
+        time += nt
+    return np.array(blocks)
 
 from bisect import bisect_left
+def hashintervals(diff):
+    def nethash(time):
+        if  time > diff[-1][0]:
+            return diff[-1][1]
+        return diff[max(0, bisect_left(diff, (time, 1.0))-1)][1]
+    return nethash
+
 def smooth(history, window=16):
     # Sort the history by time, so that we don't have any negative block
     # times. Not ideal, but allows us to avoid possible instability in the
@@ -75,11 +85,7 @@ def smooth(history, window=16):
         interval = (history[idx + offset][1] -
                     history[idx - offset][1]) / (2.0 * offset + 1)
         diff.append((history[idx][1], history[idx][2]*600.0/interval))
-    def nethash(time):
-        if  time > diff[-1][0]:
-            return diff[-1][1]
-        return diff[bisect_left(diff, (time, 1.0))][1]
-    return nethash
+    return hashintervals(diff)
 
 from csv import reader
 def history_from_csv(filename):
@@ -87,11 +93,8 @@ def history_from_csv(filename):
         return [(int(n),int(t),float(d)) for n,t,d in reader(csvfile)]
 
 def utility_function(blocks):
-    # Calculate root-mean-square difference from a straight-line approximation
-    l = len(blocks)
-    b = sum(t for t,d in blocks)/l - 300.0*l
-    e = sum((600.0*n+b - t)**2 for n,(t,d) in enumerate(blocks))/l
-    return e**0.5
+    # Calculate root-mean-square difference from perfection
+    return stats.tmean(blocks[:,3])
 
 def xfrange(x, y, step):
     while x < y:
@@ -99,19 +102,26 @@ def xfrange(x, y, step):
         x += step
 
 if __name__ == '__main__':
-    frc = history_from_csv('data/frc.csv')
-    print(u"Freicoin historical error: %f" % utility_function([(t,d) for n,t,d in frc]))
+    #frc = history_from_csv('data/frc.csv')
+    #print(u"Freicoin historical error: %f" % utility_function([(t,d) for n,t,d in frc]))
 
     btc = history_from_csv('data/btc.csv')
-    print(u"Bitcoin historical error: %f" % utility_function([(t,d) for n,t,d in btc]))
+    #print(u"Bitcoin historical error: %f" % utility_function([(t,d) for n,t,d in btc]))
+
     smoothed = smooth(btc)
-    print(u"w=12,G=0.15")
+    I = 9
+    g = 0.15
+    print(u"w=%d,G=%f" % (I,g))
     fp = open('out.csv', 'w')
-    for l in xfrange(1.0175, 1.25, 0.0025):
-        blks = simulate(btc[0][1], btc[-1][1], smoothed, interval=12, gain=0.15, limiter=l)
-        quality = (l, utility_function(blks))
-        print(u"l=%f: %f" % quality)
-        fp.write("%f,%f\n" % quality)
+    for l in xfrange(1.0005, 1.35, 0.0005):
+        res = []
+        for i in range(12):
+            blks = simulate(btc[0][1], btc[-1][1], smoothed, interval=I, gain=g, limiter=l)
+            res.append( (utility_function(blks), len(blks)) )
+        res = np.array(res)
+        quality = (l, stats.tmean(res[:,0]), stats.sem(res[:,0]), stats.tmean(res[:,1])/((frc[-1][1]-frc[0][1])/600.0))
+        print(u"l=%f: %f +/- %f, %f" % quality)
+        fp.write("%f,%f,%f,%f\n" % quality)
     fp.close()
 
 # End of File
