@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os.path
 import numpy as np
-from scipy import stats
+from scipy import signal, stats
 
 FILTER_COEFF = [
      -845859,  -459003,  -573589,  -703227,  -848199, -1008841,
@@ -30,38 +31,40 @@ FILTER_COEFF = [
     -2243311, -2011503, -1787578, -1573247, -1372046, -1183669,
     -1008841,  -848199,  -703227,  -573589,  -459003,  -845858]
 
-def next_difficulty(history, gain, limiter):
+def next_difficulty(history, taps, gain, limiter):
     if len(history)<2:
         return 1.0
 
-    vTimeDelta = [x[0] for x in history[:145]]
+    vTimeDelta = [x[0] for x in history[:len(taps)+1]]
     vTimeDelta = [y-x for x,y in zip(vTimeDelta[:-1], vTimeDelta[1:])]
-    vTimeDelta.extend([600] * (144 - len(vTimeDelta)))
-    vTimeDelta = [x*y for x,y in zip(vTimeDelta, FILTER_COEFF)]
+    vTimeDelta.extend([600] * (len(taps) - len(vTimeDelta)))
 
-    # TODO: remove FPU arithmetic and replace with bignums
-    dFilteredInterval = -sum(vTimeDelta) / 2147483648.0;
-    dAdjustmentFactor = 1.0 - gain * (dFilteredInterval - 600.0) / 600.0;
+    dFilteredInterval = sum(np.array(vTimeDelta) * taps)
+    tmp = (dFilteredInterval - 600.0) / 600.0
+    if gain is not None:
+        tmp *= gain
+    dAdjustmentFactor = 1.0 - tmp
 
-    max_limiter = limiter
-    min_limiter = 1.0 / limiter
-    if dAdjustmentFactor > max_limiter:
-        dAdjustmentFactor = max_limiter
-    elif dAdjustmentFactor < min_limiter:
-        dAdjustmentFactor = min_limiter
+    if limiter is not None:
+        max_limiter = limiter
+        min_limiter = limiter
+        if dAdjustmentFactor > max_limiter:
+            dAdjustmentFactor = max_limiter
+        elif dAdjustmentFactor < min_limiter:
+            dAdjustmentFactor = min_limiter
 
     return history[0][1] * dAdjustmentFactor
 
 from random import expovariate
-def simulate(start, end, nethash, interval=72, gain=0.18, limiter=2.0):
+def simulate(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0):
     blocks = []
     time = start
     while time < end:
         if not len(blocks)%interval:
-            nd = next_difficulty(blocks[:-146:-1], gain, limiter)
+            nd = next_difficulty(blocks[:-len(taps)+2:-1], taps, gain, limiter)
         nh = nethash(time)
         nt = expovariate(1.0 / (600.0 * nd / nh))
-        blocks.append( (round(time), nd, nh, nt) )
+        blocks.append( (round(time), nd, (nh + nethash(time+nt)) / 2, nt) )
         time += nt
     return np.array(blocks)
 
@@ -93,8 +96,8 @@ def history_from_csv(filename):
         return [(int(n),int(t),float(d)) for n,t,d in reader(csvfile)]
 
 def utility_function(blocks):
-    # Calculate root-mean-square difference from perfection
-    return stats.tmean(blocks[:,3])
+    # Integrate the difference from perfection
+    return sum(np.abs(blocks[:,2]-blocks[:,1])*blocks[:,3])
 
 def xfrange(x, y, step):
     while x < y:
@@ -108,20 +111,48 @@ if __name__ == '__main__':
     btc = history_from_csv('data/btc.csv')
     #print(u"Bitcoin historical error: %f" % utility_function([(t,d) for n,t,d in btc]))
 
-    smoothed = smooth(btc)
-    I = 9
-    g = 0.15
-    print(u"w=%d,G=%f" % (I,g))
-    fp = open('out.csv', 'w')
-    for l in xfrange(1.0005, 1.35, 0.0005):
-        res = []
-        for i in range(12):
-            blks = simulate(btc[0][1], btc[-1][1], smoothed, interval=I, gain=g, limiter=l)
-            res.append( (utility_function(blks), len(blks)) )
-        res = np.array(res)
-        quality = (l, stats.tmean(res[:,0]), stats.sem(res[:,0]), stats.tmean(res[:,1])/((btc[-1][1]-btc[0][1])/600.0))
-        print(u"l=%f: %f +/- %f, %f" % quality)
-        fp.write("%f,%f,%f,%f\n" % quality)
-    fp.close()
+    steps = [(0*144*600,   1.0),
+             (1*144*600, 100.0),
+             (7*144*600,   1.0),
+             (9*144*600,   1.0)]
+    nethash = hashintervals(steps)
+    w = 9
+    G = 1.0
+    L = 1000.0
+    best = None
+    for n in [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144]:
+        fn = 'out/remez,n=%d.csv'%n
+        if os.path.exists(fn):
+            continue
+        record = u""
+        for c in xfrange(0.05, 0.45, 0.005):
+            for cw in [0.001, 0.002, 0.003, 0.005, 0.008, 0.010, 0.015, 0.03, 0.05, 0.08, 0.1]:
+                if c - cw/2 < 0.001 or 0.449 < c + cw/2:
+                    continue
+                taps = signal.remez(n, [0, c - cw/2, c + cw/2, 0.5], [1, 0])
+                innerbest = None
+                for w in range(1,n+1):
+                    res = []
+                    for i in range(12):
+                        blks = simulate(steps[0][0], steps[-1][0], nethash, taps, interval=w, gain=1.0, limiter=2.0)
+                        res.append( (utility_function(blks), len(blks)) )
+                    res = np.array(res)
+                    quality = (n,c,cw,w, stats.tmean(res[:,0]), stats.sem(res[:,0]))
+                    print(u"n=%d,c=%f,cw=%f,w=%d: %f +/- %f" % quality)
+                    if best is None or quality[4] < best[4]:
+                        best = quality
+                    if innerbest is None or quality[4] < innerbest[4]:
+                        innerbest = quality
+                    record += "%d,%f,%f,%d,%f,%f\n" % quality
+        fp = open(fn, 'w')
+        fp.write(record)
+        strng = u"Best of n=%d is c=%f,cw=%f,w=%d: %f +/- %f" % quality
+        fp.write(strng)
+        print(strng)
+        fp.close()
+    print(u"Best is n=%d,c=%f,cw=%f,w=%d: %f +/- %f" % best)
+    #for w in range(1, 145):
+    #for G in xfrange(0.0025, 0.3500, 0.0025):
+    #for L in xfrange(1.0005, 1.3500, 0.0005):
 
 # End of File
