@@ -36,7 +36,7 @@ def next_difficulty(history, taps, gain, limiter):
         return 1.0
 
     vTimeDelta = [x[0] for x in history[:len(taps)+1]]
-    vTimeDelta = [y-x for x,y in zip(vTimeDelta[:-1], vTimeDelta[1:])]
+    vTimeDelta = [x-y for x,y in zip(vTimeDelta[:-1], vTimeDelta[1:])]
     vTimeDelta.extend([600] * (len(taps) - len(vTimeDelta)))
 
     dFilteredInterval = sum(np.array(vTimeDelta) * taps)
@@ -47,7 +47,7 @@ def next_difficulty(history, taps, gain, limiter):
 
     if limiter is not None:
         max_limiter = limiter
-        min_limiter = limiter
+        min_limiter = 1.0 / limiter
         if dAdjustmentFactor > max_limiter:
             dAdjustmentFactor = max_limiter
         elif dAdjustmentFactor < min_limiter:
@@ -61,7 +61,7 @@ def simulate(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0):
     time = start
     while time < end:
         if not len(blocks)%interval:
-            nd = next_difficulty(blocks[:-len(taps)+2:-1], taps, gain, limiter)
+            nd = next_difficulty(blocks[-len(taps)-1:][::-1], taps, gain, limiter)
         nh = nethash(time)
         nt = expovariate(1.0 / (600.0 * nd / nh))
         blocks.append( (round(time), nd, (nh + nethash(time+nt)) / 2, nt) )
