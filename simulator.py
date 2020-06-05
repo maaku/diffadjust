@@ -55,8 +55,7 @@ def next_difficulty(history, taps, gain, limiter):
 
     return history[0][1] * dAdjustmentFactor
 
-from random import expovariate
-def simulate(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0):
+def rawsim(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0, func=None):
     blocks = []
     time = start
     nd = nethash(time)
@@ -64,10 +63,16 @@ def simulate(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0):
         if blocks and not len(blocks)%interval:
             nd = next_difficulty(blocks[-len(taps)-1:][::-1], taps, gain, limiter)
         nh = nethash(time)
-        nt = expovariate(1.0 / (600.0 * nd / nh))
+        nt = func(nd, nh)
         blocks.append( (round(time), nd, (nh + nethash(time+nt)) / 2, nt) )
         time += nt
     return np.array(blocks)
+
+from random import expovariate
+def simulate(*args, **argv):
+    return rawsim(func=lambda nd,nh: expovariate(1.0 / (600.0 * nd / nh)), *args, **argv)
+def impulse(*args, **argv):
+    return rawsim(func=lambda nd,nh: 600.0 * nd / nh, *args, **argv)
 
 from bisect import bisect_left
 def hashintervals(diff):
