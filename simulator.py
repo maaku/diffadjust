@@ -32,7 +32,7 @@ FILTER_COEFF = [
     -1008841,  -848199,  -703227,  -573589,  -459003,  -845858]
 
 def next_difficulty(history, taps, gain, limiter):
-    if len(history)<2:
+    if not history:
         return 1.0
 
     vTimeDelta = [x[0] for x in history[:len(taps)+1]]
@@ -59,8 +59,9 @@ from random import expovariate
 def simulate(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0):
     blocks = []
     time = start
+    nd = nethash(time)
     while time < end:
-        if not len(blocks)%interval:
+        if blocks and not len(blocks)%interval:
             nd = next_difficulty(blocks[-len(taps)-1:][::-1], taps, gain, limiter)
         nh = nethash(time)
         nt = expovariate(1.0 / (600.0 * nd / nh))
@@ -97,7 +98,8 @@ def history_from_csv(filename):
 
 def utility_function(blocks):
     # Integrate the difference from perfection
-    return sum(np.abs(blocks[:,2]-blocks[:,1])*blocks[:,3])
+    e = sum(np.square(blocks[:,2]-blocks[:,1])*blocks[:,3]) / (blocks[-1][0] - blocks[0][0])
+    return np.sqrt(e)
 
 def xfrange(x, y, step):
     while x < y:
@@ -117,40 +119,45 @@ if __name__ == '__main__':
              (9*144*600,   1.0)]
     nethash = hashintervals(steps)
     w = 9
-    G = 1.0
-    L = 1000.0
+    G = 0.125
+    L = 1.375
     best = None
     for n in [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144]:
         fn = 'out/remez,n=%d.csv'%n
         if os.path.exists(fn):
             continue
         record = u""
-        for c in xfrange(0.05, 0.45, 0.005):
-            for cw in [0.001, 0.002, 0.003, 0.005, 0.008, 0.010, 0.015, 0.03, 0.05, 0.08, 0.1]:
-                if c - cw/2 < 0.001 or 0.449 < c + cw/2:
+        innerbest = None
+        for c in xfrange(0.01, 0.49, 0.005):
+            for cw in [0.001, 0.002, 0.003, 0.005, 0.008, 0.010, 0.015, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2]:
+                if c - cw/2 < 0.001 or 0.499 < c + cw/2:
                     continue
-                taps = signal.remez(n, [0, c - cw/2, c + cw/2, 0.5], [1, 0])
+                try:
+                    taps = signal.remez(n, [0, c - cw/2, c + cw/2, 0.5], [1, 0], maxiter=50)
+                    taps /= sum(taps)
+                except:
+                    continue
                 innerbest = None
                 for w in range(1,n+1):
                     res = []
                     for i in range(12):
-                        blks = simulate(steps[0][0], steps[-1][0], nethash, taps, interval=w, gain=1.0, limiter=2.0)
+                        blks = simulate(steps[0][0], steps[-1][0], nethash, taps, interval=w, gain=G, limiter=L)
                         res.append( (utility_function(blks), len(blks)) )
                     res = np.array(res)
-                    quality = (n,c,cw,w, stats.tmean(res[:,0]), stats.sem(res[:,0]))
-                    print(u"n=%d,c=%f,cw=%f,w=%d: %f +/- %f" % quality)
-                    if best is None or quality[4] < best[4]:
+                    quality = (n,c,cw,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]))
+                    print(u"n=%d,c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % quality)
+                    if best is None or quality[6] < best[6]:
                         best = quality
-                    if innerbest is None or quality[4] < innerbest[4]:
+                    if innerbest is None or quality[6] < innerbest[6]:
                         innerbest = quality
-                    record += "%d,%f,%f,%d,%f,%f\n" % quality
+                    record += "%d,%f,%f,%d,%f,%f,%f,%f\n" % quality
         fp = open(fn, 'w')
         fp.write(record)
-        strng = u"Best of n=%d is c=%f,cw=%f,w=%d: %f +/- %f" % quality
+        strng = u"Best of n=%d is c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % quality
         fp.write(strng)
         print(strng)
         fp.close()
-    print(u"Best is n=%d,c=%f,cw=%f,w=%d: %f +/- %f" % best)
+    print(u"Best is n=%d,c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % best)
     #for w in range(1, 145):
     #for G in xfrange(0.0025, 0.3500, 0.0025):
     #for L in xfrange(1.0005, 1.3500, 0.0005):
