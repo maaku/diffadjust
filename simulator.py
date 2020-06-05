@@ -152,7 +152,7 @@ if __name__ == '__main__':
                     record += "%d,%f,%f,%d,%f,%f,%f,%f\n" % quality
         fp = open(fn, 'w')
         fp.write(record)
-        strng = u"Best of n=%d is c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % quality
+        strng = u"Best of n=%d is c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f\n" % quality
         fp.write(strng)
         print(strng)
         fp.close()
