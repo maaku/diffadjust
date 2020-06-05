@@ -134,10 +134,9 @@ if __name__ == '__main__':
                     continue
                 try:
                     taps = signal.remez(n, [0, c - cw/2, c + cw/2, 0.5], [1, 0], maxiter=50)
-                    taps /= sum(taps)
+                    taps /= sum(taps) # Normalize
                 except:
                     continue
-                innerbest = None
                 for w in range(1,n+1):
                     res = []
                     for i in range(12):
