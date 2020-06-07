@@ -99,7 +99,7 @@ def smooth(history, window=16):
 from csv import reader
 def history_from_csv(filename):
     with open(filename, 'r') as csvfile:
-        return [(int(n),int(t),float(d)) for n,t,d in reader(csvfile)]
+        return [(int(t),float(d)) for n,t,d in reader(csvfile)]
 
 def utility_function(blocks):
     # Integrate the difference from perfection
@@ -115,14 +115,17 @@ if __name__ == '__main__':
     #frc = history_from_csv('data/frc.csv')
     #print(u"Freicoin historical error: %f" % utility_function([(t,d) for n,t,d in frc]))
 
-    btc = history_from_csv('data/btc.csv')
+    #btc = history_from_csv('data/btc.csv')
     #print(u"Bitcoin historical error: %f" % utility_function([(t,d) for n,t,d in btc]))
 
     steps = [(0*144*600,   1.0),
              (1*144*600, 100.0),
              (7*144*600,   1.0),
              (9*144*600,   1.0)]
+
+    samples = steps
     nethash = hashintervals(steps)
+
     w = 9
     G = 0.125
     L = 1.375
@@ -145,7 +148,7 @@ if __name__ == '__main__':
                 for w in range(1,n+1):
                     res = []
                     for i in range(12):
-                        blks = simulate(steps[0][0], steps[-1][0], nethash, taps, interval=w, gain=G, limiter=L)
+                        blks = simulate(samples[0][0], samples[-1][0], nethash, taps, interval=w, gain=G, limiter=L)
                         res.append( (utility_function(blks), len(blks)) )
                     res = np.array(res)
                     quality = (n,c,cw,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]))
