@@ -86,8 +86,7 @@ def smooth(history, window=16):
     # Sort the history by time, so that we don't have any negative block
     # times. Not ideal, but allows us to avoid possible instability in the
     # simulator.
-    history = [(int(n),int(t),float(d))
-               for t,n,d in sorted((t,n,d) for n,t,d in history)]
+    history = [x for x in sorted(history)]
     diff = []
     for idx in range(2, len(history)-1):
         offset = min(idx-1, window, len(history)-1-idx)
