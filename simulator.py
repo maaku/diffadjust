@@ -90,9 +90,9 @@ def smooth(history, window=16):
     diff = []
     for idx in range(2, len(history)-1):
         offset = min(idx-1, window, len(history)-1-idx)
-        interval = (history[idx + offset][1] -
-                    history[idx - offset][1]) / (2.0 * offset + 1)
-        diff.append((history[idx][1], history[idx][2]*600.0/interval))
+        interval = (history[idx + offset][0] -
+                    history[idx - offset][0]) / (2.0 * offset + 1)
+        diff.append((history[idx][0], history[idx][1]*600.0/interval))
     return hashintervals(diff)
 
 from csv import reader
