@@ -126,18 +126,18 @@ if __name__ == '__main__':
     samples = steps
     nethash = hashintervals(steps)
 
-    w = 9
     G = 0.125
     L = 1.375
     best = None
-    for n in [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144]:
+    for n in [36] + [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144][::-1]:
         fn = 'out/remez,n=%d.csv'%n
         if os.path.exists(fn):
             continue
         record = u""
         innerbest = None
-        for c in xfrange(0.01, 0.49, 0.005):
-            for cw in [0.001, 0.002, 0.003, 0.005, 0.008, 0.010, 0.015, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2]:
+        for cd in range(3,10):
+            c = 1.0 / cd
+            for cw in xfrange(c / 16, c / 2 + 0.001, c / 16):
                 if c - cw/2 < 0.001 or 0.499 < c + cw/2:
                     continue
                 try:
@@ -145,7 +145,7 @@ if __name__ == '__main__':
                     taps /= sum(taps) # Normalize
                 except:
                     continue
-                for w in range(1,n+1):
+                for w in range(4,min(18,n)+1):
                     res = []
                     for i in range(12):
                         blks = simulate(samples[0][0], samples[-1][0], nethash, taps, interval=w, gain=G, limiter=L)
