@@ -33,13 +33,13 @@ FILTER_COEFF = [
 
 def next_difficulty(history, b, a, gain, limiter):
     if not history:
-        return 1.0
+        return 1.0, 600.0
 
     vTimeDelta = [x[0] for x in history[:len(b)+1]]
     vTimeDelta = [x-y for x,y in zip(vTimeDelta[:-1], vTimeDelta[1:])]
     vTimeDelta.extend([600] * (len(b) - len(vTimeDelta)))
 
-    vPredBuffer = [x[2] for x in history[1:len(a)+2]]
+    vPredBuffer = [x[2] for x in history[:len(a)]]
     vPredBuffer.extend([600] * (len(a) - len(vPredBuffer)))
 
     dFilteredInterval = sum(np.array(vTimeDelta) * b) - sum(np.array(vPredBuffer) * a)
@@ -56,19 +56,19 @@ def next_difficulty(history, b, a, gain, limiter):
         elif dAdjustmentFactor < min_limiter:
             dAdjustmentFactor = min_limiter
 
-    return history[0][1] * dAdjustmentFactor
+    return history[0][1] * dAdjustmentFactor, dFilteredInterval
 
 def rawsim(start, end, nethash, b, a, interval=72, gain=0.18, limiter=2.0, func=None):
     blocks = []
     time = start
     cd = nethash(time)
     while time < end:
-        nd = next_difficulty(blocks[-max(len(b),len(a))-1:][::-1], b, a, gain, limiter)
+        nd, pred = next_difficulty(blocks[-max(len(b),len(a))-1:][::-1], b, a, gain, limiter)
         if blocks and not len(blocks)%interval:
             cd = nd
         nh = nethash(time)
         nt = func(nd, nh)
-        blocks.append( (round(time), cd, nd, (nh + nethash(time+nt)) / 2, nt) )
+        blocks.append( (round(time), cd, pred, (nh + nethash(time+nt)) / 2, nt) )
         time += nt
     return np.array(blocks)
 
