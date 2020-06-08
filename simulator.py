@@ -133,14 +133,16 @@ if __name__ == '__main__':
     L = 1.375
     best = None
     for n in [36] + [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144][::-1]:
-        fn = 'out/remez,n=%d.csv'%n
+      for L in [1.125, 1.25, 1.40625]:
+        fn = 'out/remez,n=%d,L=%f.csv'%(n,L)
         if os.path.exists(fn):
             continue
         record = u""
         innerbest = None
-        for cd in range(3,10):
+        for cd in [4]:
             c = 1.0 / cd
-            for cw in xfrange(c / 16, c / 2 + 0.001, c / 16):
+            for cw in xfrange(3 * c / 16, 5 * c / 16 + 0.001, c / 16):
+              for G in xfrange(0.0625, 0.2501, 0.015625):
                 if c - cw/2 < 0.001 or 0.499 < c + cw/2:
                     continue
                 try:
