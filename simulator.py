@@ -31,15 +31,18 @@ FILTER_COEFF = [
     -2243311, -2011503, -1787578, -1573247, -1372046, -1183669,
     -1008841,  -848199,  -703227,  -573589,  -459003,  -845858]
 
-def next_difficulty(history, taps, gain, limiter):
+def next_difficulty(history, b, a, gain, limiter):
     if not history:
         return 1.0
 
-    vTimeDelta = [x[0] for x in history[:len(taps)+1]]
+    vTimeDelta = [x[0] for x in history[:len(b)+1]]
     vTimeDelta = [x-y for x,y in zip(vTimeDelta[:-1], vTimeDelta[1:])]
-    vTimeDelta.extend([600] * (len(taps) - len(vTimeDelta)))
+    vTimeDelta.extend([600] * (len(b) - len(vTimeDelta)))
 
-    dFilteredInterval = sum(np.array(vTimeDelta) * taps)
+    vPredBuffer = [x[2] for x in history[1:len(a)+2]]
+    vPredBuffer.extend([600] * (len(a) - len(vPredBuffer)))
+
+    dFilteredInterval = sum(np.array(vTimeDelta) * b) - sum(np.array(vPredBuffer) * a)
     tmp = (dFilteredInterval - 600.0) / 600.0
     if gain is not None:
         tmp *= gain
@@ -55,16 +58,17 @@ def next_difficulty(history, taps, gain, limiter):
 
     return history[0][1] * dAdjustmentFactor
 
-def rawsim(start, end, nethash, taps, interval=72, gain=0.18, limiter=2.0, func=None):
+def rawsim(start, end, nethash, b, a, interval=72, gain=0.18, limiter=2.0, func=None):
     blocks = []
     time = start
-    nd = nethash(time)
+    cd = nethash(time)
     while time < end:
+        nd = next_difficulty(blocks[-max(len(b),len(a))-1:][::-1], b, a, gain, limiter)
         if blocks and not len(blocks)%interval:
-            nd = next_difficulty(blocks[-len(taps)-1:][::-1], taps, gain, limiter)
+            cd = nd
         nh = nethash(time)
         nt = func(nd, nh)
-        blocks.append( (round(time), nd, (nh + nethash(time+nt)) / 2, nt) )
+        blocks.append( (round(time), cd, nd, (nh + nethash(time+nt)) / 2, nt) )
         time += nt
     return np.array(blocks)
 
@@ -147,7 +151,7 @@ if __name__ == '__main__':
                 for w in range(4,min(18,n)+1):
                     res = []
                     for i in range(12):
-                        blks = simulate(samples[0][0], samples[-1][0], nethash, taps, interval=w, gain=G, limiter=L)
+                        blks = simulate(samples[0][0], samples[-1][0], nethash, taps, [], interval=w, gain=G, limiter=L)
                         res.append( (utility_function(blks), len(blks)) )
                     res = np.array(res)
                     quality = (n,c,cw,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]))
