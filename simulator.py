@@ -132,28 +132,28 @@ if __name__ == '__main__':
     G = 0.125
     L = 1.375
     best = None
-    for n in [36] + [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144][::-1]:
-      for L in [1.125, 1.25, 1.40625]:
-        fn = 'out/remez,n=%d,L=%f.csv'%(n,L)
+    for n in [36] + [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144]:
+      for L in [1.0546875, 1.125, 1.25]:
+        fn = 'out/bessel,n=%d,L=%f.csv'%(n,L)
         if os.path.exists(fn):
             continue
         record = u""
         innerbest = None
-        for cd in [4]:
+        for cd in [2, 3, 4]:
             c = 1.0 / cd
-            for cw in xfrange(3 * c / 16, 5 * c / 16 + 0.001, c / 16):
-              for G in xfrange(0.0625, 0.2501, 0.015625):
-                if c - cw/2 < 0.001 or 0.499 < c + cw/2:
-                    continue
+            cw = 0.0
+            for G in xfrange(0.0625, 0.2501, 0.015625):
                 try:
-                    taps = signal.remez(n, [0, c - cw/2, c + cw/2, 0.5], [1, 0], maxiter=50)
-                    taps /= sum(taps) # Normalize
+                    b, a = signal.bessel(n, c, 'low')
+                    b /= a[0] # Normalize
+                    a /= a[0]
+                    a = a[1:]
                 except:
                     continue
-                for w in range(4,min(18,n)+1):
+                for w in [1]:
                     res = []
-                    for i in range(12):
-                        blks = simulate(samples[0][0], samples[-1][0], nethash, taps, [], interval=w, gain=G, limiter=L)
+                    for i in range(8):
+                        blks = simulate(samples[0][0], samples[-1][0], nethash, b, a, interval=w, gain=G, limiter=L)
                         res.append( (utility_function(blks), len(blks)) )
                     res = np.array(res)
                     quality = (n,c,cw,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]))
