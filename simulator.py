@@ -106,7 +106,7 @@ def history_from_csv(filename):
 
 def utility_function(blocks):
     # Integrate the difference from perfection
-    e = sum(np.square(blocks[:,2]-blocks[:,1])*blocks[:,3]) / (blocks[-1][0] - blocks[0][0])
+    e = sum(np.square(blocks[:,3]-blocks[:,1])*blocks[:,4]) / (blocks[-1][0] - blocks[0][0])
     return np.sqrt(e)
 
 def xfrange(x, y, step):
