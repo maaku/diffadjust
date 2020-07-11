@@ -129,20 +129,30 @@ if __name__ == '__main__':
     samples = steps
     nethash = hashintervals(steps)
 
-    G = 0.125
-    L = 1.375
+    #          n  c    G          L
+    params = [( 2, 0.5, 0.15625,   1.065),
+              ( 3, 0.5, 0.1328125, 1.065),
+              ( 4, 0.5, 0.1171875, 1.065),
+              ( 5, 0.5, 0.1015625, 1.065),
+              ( 6, 0.5, 0.09375,   1.065),
+              ( 7, 0.5, 0.078125,  1.065),
+              ( 8, 0.5, 0.0703125, 1.065),
+              ( 9, 0.5, 0.0703125, 1.065),
+              (10, 0.5, 0.0625,    1.065)]
+
     best = None
-    for n in [11] + [2,3,4,5,6,7,8,9,10,12,14,15,16,18,20,21,24,27,28,30,32,36,40,42,45,48,54,56,60,63,64,72,80,84,90,96,108,112,120,126,128,144]:
-      for L in [1.0546875, 1.125, 1.25]:
+    for cfg in params:
+        n = cfg[0]
+        c = cfg[1]
+        g = cfg[2]
+        L = cfg[3]
         fn = 'out/bessel,n=%d,L=%f.csv'%(n,L)
         if os.path.exists(fn):
             continue
         record = u""
         innerbest = None
-        for cd in [2, 3, 4]:
-            c = 1.0 / cd
-            cw = 0.0
-            for G in xfrange(0.0078125, 0.06251, 0.0078125):
+        for G in [1.0/256, 1.0/128, 1.0/92, 1.0/64, 1.0/48, 1.0/32, 1.0/16, 1.0/8, 1.0/4]:
+            if True:
                 try:
                     b, a = signal.bessel(n, c, 'low')
                     b /= a[0] # Normalize
@@ -156,20 +166,20 @@ if __name__ == '__main__':
                         blks = simulate(samples[0][0], samples[-1][0], nethash, b, a, interval=w, gain=G, limiter=L)
                         res.append( (utility_function(blks), len(blks)) )
                     res = np.array(res)
-                    quality = (n,c,cw,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]))
-                    print(u"n=%d,c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % quality)
-                    if best is None or quality[6] < best[6]:
+                    quality = (n,c,w,G,L, stats.tmean(res[:,0]), stats.sem(res[:,0]), (samples[-1][0]-samples[0][0])/stats.tmean(res[:,1]))
+                    print(u"n=%d,c=%f,w=%d,G=%f,L=%f: %f +/- %f, %f" % quality)
+                    if best is None or quality[5] < best[5]:
                         best = quality
-                    if innerbest is None or quality[6] < innerbest[6]:
+                    if innerbest is None or quality[5] < innerbest[5]:
                         innerbest = quality
-                    record += "%d,%f,%f,%d,%f,%f,%f,%f\n" % quality
+                    record += "%d,%f,%d,%f,%f,%f,%f,%f\n" % quality
         fp = open(fn, 'w')
         fp.write(record)
-        strng = u"Best of n=%d is c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f\n" % innerbest
+        strng = u"Best of n=%d is c=%f,w=%d,G=%f,L=%f: %f +/- %f, %f\n" % innerbest
         fp.write(strng)
         print(strng)
         fp.close()
-    print(u"Best is n=%d,c=%f,cw=%f,w=%d,G=%f,L=%f: %f +/- %f" % best)
+    print(u"Best is n=%d,c=%f,w=%d,G=%f,L=%f: %f +/- %f, %f" % best)
     #for w in range(1, 145):
     #for G in xfrange(0.0025, 0.3500, 0.0025):
     #for L in xfrange(1.0005, 1.3500, 0.0005):
